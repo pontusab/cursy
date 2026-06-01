@@ -1,5 +1,3 @@
-# cursy
-
 <p align="center">
   <img src="site/img/og.jpg" alt="cursy — Cursor, from iMessage" width="100%" />
 </p>
