@@ -1,0 +1,67 @@
+name: release
+
+# Cut a release by pushing a tag like v0.2.0.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck & test
+        run: |
+          bun run typecheck
+          bun test
+
+      # Import the Developer ID Application certificate so binaries are signed
+      # with a stable identity. Provide these repo secrets:
+      #   MACOS_CERT_P12_BASE64  - base64 of your Developer ID .p12
+      #   MACOS_CERT_PASSWORD    - password for the .p12
+      # Without them, the build falls back to ad-hoc signing.
+      - name: Import signing certificate
+        if: env.MACOS_CERT_P12_BASE64 != ''
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN_PW="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PW" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+
+      - name: Build, sign & package
+        env:
+          # Notarize when Apple creds are present; otherwise skip (still signed).
+          CURSY_NOTARIZE: ${{ secrets.APPLE_APP_PASSWORD != '' && '1' || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: bash scripts/release.sh
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/cursy-darwin-arm64.tar.gz
+            dist/cursy-darwin-x64.tar.gz
+            dist/checksums.txt
+          generate_release_notes: true
