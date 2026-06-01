@@ -3,239 +3,161 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>cursy — Control Cursor from iMessage</title>
-<meta name="description" content="Text your own number and a tiny daemon on your Mac runs the prompt through cursor-agent and texts the result back. Runs 100% locally." />
-<meta name="theme-color" content="#0a0a0a" />
-<meta property="og:title" content="cursy — Control Cursor from iMessage" />
-<meta property="og:description" content="Text your own number; a local daemon routes it to cursor-agent and texts the result back. Runs 100% locally on your Mac." />
+<title>cursy — Cursor from iMessage</title>
+<meta name="description" content="Text your own number. A small daemon on your Mac runs the prompt through cursor-agent and texts the result back. Local only." />
+<meta name="theme-color" content="#0c1330" />
+<meta property="og:title" content="cursy — Cursor from iMessage" />
+<meta property="og:description" content="Text your own number; a local daemon routes it to cursor-agent and texts the result back." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://cursy.dev" />
+<meta property="og:image" content="https://cursy.dev/img/og.jpg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:image" content="https://cursy.dev/img/og.jpg" />
 <meta name="twitter:card" content="summary_large_image" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='42' fill='%230b93f6'/></svg>" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='38' fill='none' stroke='%23f4f1e8' stroke-width='5'/></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Newsreader:opsz,wght@6..72,300;6..72,400&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --bg: #0a0a0a;
-    --fg: #ededed;
-    --muted: #8a8a8a;
-    --blue: #0b93f6;
-    --card: #141416;
-    --gray-bubble: #262629;
-    --border: #232326;
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    --cream: #f5f2ea;
+    --soft: rgba(245, 242, 234, 0.66);
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --serif: "Newsreader", Georgia, "Times New Roman", serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --glow: 0 1px 2px rgba(0,0,0,0.5), 0 2px 30px rgba(0,0,0,0.45);
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   html { -webkit-text-size-adjust: 100%; }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
+    min-height: 100vh;
     font-family: var(--sans);
-    line-height: 1.6;
+    color: var(--cream);
+    background: #0c1330 url("img/bg.jpg") center center / cover no-repeat fixed;
     -webkit-font-smoothing: antialiased;
-  }
-  .wrap {
-    max-width: 640px;
-    margin: 0 auto;
-    padding: 96px 24px 64px;
-  }
-  .brand {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-family: var(--mono);
-    font-size: 15px;
-    letter-spacing: -0.02em;
-    color: var(--fg);
+    justify-content: center;
+    text-align: center;
+    padding: 40px 22px;
   }
-  .dot {
-    width: 9px; height: 9px; border-radius: 50%;
-    background: var(--blue);
-    box-shadow: 0 0 14px var(--blue);
+  /* Soft scrim: darken just enough for legible text, keep the color */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(105% 80% at 50% 46%, rgba(6,10,28,0.18) 0%, rgba(6,10,28,0.46) 58%, rgba(4,7,20,0.66) 100%);
+    pointer-events: none;
   }
+
+  .stage { position: relative; max-width: 540px; }
+
+  .brand {
+    font-size: 13px;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: var(--soft);
+    text-shadow: var(--glow);
+  }
+
   h1 {
-    font-size: clamp(32px, 7vw, 46px);
-    line-height: 1.1;
-    letter-spacing: -0.03em;
-    margin: 40px 0 16px;
-    font-weight: 650;
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(40px, 8vw, 60px);
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    margin: 26px 0 38px;
+    text-shadow: var(--glow);
   }
-  .lede {
-    color: var(--muted);
-    font-size: 17px;
-    margin: 0 0 32px;
-    max-width: 520px;
-  }
-  .lede code {
-    font-family: var(--mono);
-    font-size: 14px;
-    color: #cfcfcf;
-    background: #1b1b1e;
-    padding: 1px 6px;
-    border-radius: 5px;
-  }
-  /* Install command */
+
   .cmd {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 12px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px 14px 14px 18px;
+    background: rgba(8, 12, 28, 0.34);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border: 1px solid rgba(245, 242, 234, 0.18);
+    border-radius: 13px;
+    padding: 12px 12px 12px 16px;
     font-family: var(--mono);
-    font-size: 14px;
+    font-size: 13px;
+    box-shadow: 0 10px 40px -12px rgba(0,0,0,0.5);
   }
-  .cmd .prompt { color: var(--blue); user-select: none; }
-  .cmd code { flex: 1; color: var(--fg); overflow-x: auto; white-space: nowrap; }
+  .cmd .sigil { color: var(--soft); user-select: none; }
+  .cmd code { white-space: nowrap; color: var(--cream); }
   .cmd button {
     flex-shrink: 0;
-    background: #1f1f23;
-    color: var(--fg);
-    border: 1px solid var(--border);
+    background: var(--cream);
+    color: #14182b;
+    border: 0;
     border-radius: 8px;
-    padding: 6px 12px;
-    font-family: var(--mono);
-    font-size: 12px;
+    padding: 7px 14px;
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
     cursor: pointer;
-    transition: background .15s, color .15s;
+    transition: opacity .15s;
   }
-  .cmd button:hover { background: var(--blue); border-color: var(--blue); color: #fff; }
-  .links {
-    margin: 18px 0 0;
-    display: flex;
-    gap: 18px;
-    font-size: 14px;
-  }
-  .links a { color: var(--muted); text-decoration: none; }
-  .links a:hover { color: var(--fg); }
+  .cmd button:hover { opacity: 0.85; }
 
-  /* Faux iMessage thread */
-  .thread {
-    margin: 56px 0;
+  .footer {
+    position: fixed;
+    left: 18px;
+    right: 18px;
+    bottom: 14px;
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .bubble {
-    max-width: 78%;
-    padding: 10px 15px;
-    border-radius: 20px;
-    font-size: 15px;
-    line-height: 1.45;
-  }
-  .me {
-    align-self: flex-end;
-    background: var(--blue);
-    color: #fff;
-    border-bottom-right-radius: 6px;
-  }
-  .them {
-    align-self: flex-start;
-    background: var(--gray-bubble);
-    color: var(--fg);
-    border-bottom-left-radius: 6px;
-  }
-  .them code {
-    font-family: var(--mono);
-    font-size: 13px;
-    background: #00000040;
-    padding: 1px 5px;
-    border-radius: 4px;
-  }
-
-  /* Steps */
-  .steps { margin: 48px 0 0; }
-  .steps h2 {
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    font-weight: 600;
-    margin: 0 0 18px;
-  }
-  .step {
-    display: flex;
+    justify-content: space-between;
+    align-items: center;
     gap: 14px;
-    padding: 12px 0;
-    border-top: 1px solid var(--border);
-    align-items: baseline;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
   }
-  .step .n {
-    font-family: var(--mono);
-    color: var(--blue);
-    font-size: 13px;
-    width: 18px;
-    flex-shrink: 0;
-  }
-  .step .t { font-size: 15px; }
-  .step .t code {
-    font-family: var(--mono);
-    font-size: 13px;
-    background: #1b1b1e;
-    padding: 1px 6px;
-    border-radius: 5px;
-    color: #cfcfcf;
-  }
-  .step .t .sub { color: var(--muted); font-size: 14px; }
 
-  footer {
-    margin-top: 72px;
-    padding-top: 24px;
-    border-top: 1px solid var(--border);
+  .links {
     display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--muted);
+    align-items: center;
+    gap: 14px;
+    font-size: 12.5px;
+    color: rgba(245, 242, 234, 0.92);
   }
-  footer a { color: var(--muted); text-decoration: none; }
-  footer a:hover { color: var(--fg); }
+  .links a { color: rgba(245, 242, 234, 0.92); text-decoration: none; transition: color .15s; }
+  .links a:hover { color: var(--cream); }
+  .links .sep { width: 3px; height: 3px; border-radius: 50%; background: rgba(245, 242, 234, 0.92); }
+
+  .credit {
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+    color: rgba(245, 242, 234, 0.82);
+  }
+  @media (max-width: 480px) {
+    .cmd { font-size: 11.5px; }
+    .credit { display: none; }
+    .footer { justify-content: center; }
+  }
 </style>
 </head>
 <body>
-  <main class="wrap">
-    <div class="brand"><span class="dot"></span> cursy</div>
-
-    <h1>Control Cursor<br />from iMessage.</h1>
-    <p class="lede">
-      Text your own number. A tiny daemon on your Mac runs the prompt through
-      <code>cursor-agent</code> and texts the result back. Each thread is a
-      persistent session — it feels like a conversation with your codebase.
-      Runs 100% locally.
-    </p>
+  <main class="stage">
+    <h1>Cursor,<br />from iMessage.</h1>
 
     <div class="cmd">
-      <span class="prompt">$</span>
+      <span class="sigil">$</span>
       <code id="cmd">curl -fsSL https://cursy.dev/install | bash</code>
       <button id="copy" aria-label="Copy install command">Copy</button>
     </div>
-    <div class="links">
-      <a href="https://github.com/pontusab/cursy">GitHub</a>
-      <a href="https://github.com/pontusab/cursy#readme">Docs</a>
-    </div>
-
-    <div class="thread" aria-hidden="true">
-      <div class="bubble me">fix the failing test in auth.ts</div>
-      <div class="bubble them">Found it — <code>expiresAt</code> was compared as a string, so the check never tripped. Fixed it and the suite passes. ✅</div>
-      <div class="bubble me">ship it</div>
-      <div class="bubble them">Committed and pushed to <code>main</code>. 🚀</div>
-    </div>
-
-    <section class="steps">
-      <h2>How it works</h2>
-      <div class="step"><span class="n">1</span><span class="t"><code>brew install pontusab/tap/cursy</code> <span class="sub">— or the curl line above</span></span></div>
-      <div class="step"><span class="n">2</span><span class="t"><code>cursy start</code> <span class="sub">— scan the QR, grant two macOS permissions</span></span></div>
-      <div class="step"><span class="n">3</span><span class="t">Text yourself. That's it.</span></div>
-    </section>
-
-    <footer>
-      <span>MIT</span>
-      <a href="https://github.com/pontusab/cursy">github.com/pontusab/cursy</a>
-      <span>made by <a href="https://github.com/pontusab">@pontusab</a></span>
-    </footer>
   </main>
+
+  <footer class="footer">
+    <div class="credit">Vincent van Gogh, <em>Starry Night Over the Rhône</em>, 1888</div>
+    <nav class="links">
+      <a href="https://github.com/pontusab/cursy">GitHub</a>
+      <span class="sep"></span>
+      <a href="https://x.com/pontusab">Twitter</a>
+    </nav>
+  </footer>
 
   <script>
     const btn = document.getElementById("copy");
@@ -245,7 +167,7 @@
         btn.textContent = "Copied";
         setTimeout(() => (btn.textContent = "Copy"), 1500);
       } catch {
-        btn.textContent = "Copy ⌘C";
+        btn.textContent = "⌘C";
       }
     });
   </script>

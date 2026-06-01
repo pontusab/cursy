@@ -1,5 +1,9 @@
 # cursy
 
+<p align="center">
+  <img src="site/img/og.jpg" alt="cursy — Cursor, from iMessage" width="100%" />
+</p>
+
 Control [Cursor](https://cursor.com) from iMessage. Text your own number (or yourself from another device) and a small daemon on your Mac runs the prompt through the `cursor-agent` CLI and texts the result back. Each iMessage thread maps to a persistent agent session, so it feels like a natural conversation with your codebase.
 
 Everything runs **locally on your Mac**. No cloud relay, no third-party servers, and your iMessage credentials never leave the Messages app.
