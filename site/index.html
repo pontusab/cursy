@@ -50,7 +50,11 @@
   /* Fixed layer: full viewport on iOS + desktop (not behind html via negative z-index) */
   .page-bg {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    height: 100lvh; /* cover the largest mobile viewport so toolbars never reveal a gap */
     z-index: 0;
     background: #0c1330 url("img/bg.jpg") center center / cover no-repeat;
     pointer-events: none;
@@ -61,6 +65,50 @@
     inset: 0;
     background:
       radial-gradient(105% 80% at 50% 46%, rgba(6,10,28,0.18) 0%, rgba(6,10,28,0.46) 58%, rgba(4,7,20,0.66) 100%);
+  }
+
+  /* Glass iMessage bubbles drifting around the hero (decorative, desktop only). */
+  .msg-field {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .bubble {
+    position: absolute;
+    max-width: 210px;
+    padding: 10px 14px;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 1.35;
+    color: var(--cream);
+    border: 1px solid rgba(245, 242, 234, 0.22);
+    background: rgba(245, 242, 234, 0.10);
+    backdrop-filter: blur(14px) saturate(135%);
+    -webkit-backdrop-filter: blur(14px) saturate(135%);
+    box-shadow: 0 14px 36px -16px rgba(0, 0, 0, 0.65);
+    /* left/top place the bubble's CENTER on the ring (see inline styles). */
+    transform: translate(-50%, -50%);
+    animation: floaty 11s ease-in-out infinite;
+    will-change: transform;
+  }
+  .bubble.sent {
+    background: rgba(31, 140, 255, 0.24);
+    border-color: rgba(170, 210, 255, 0.42);
+    border-bottom-right-radius: 6px;
+    color: #fff;
+  }
+  .bubble.recv { border-bottom-left-radius: 6px; }
+  @keyframes floaty {
+    0%, 100% { transform: translate(-50%, -50%); }
+    50% { transform: translate(-50%, calc(-50% - 8px)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bubble { animation: none; }
+  }
+  @media (max-width: 900px) {
+    .msg-field { display: none; }
   }
 
   .hero {
@@ -110,7 +158,7 @@
     align-items: center;
     gap: 12px;
     max-width: 100%;
-    overflow-x: auto;
+    overflow: hidden;
     background: rgba(8, 12, 28, 0.34);
     backdrop-filter: blur(10px) saturate(120%);
     -webkit-backdrop-filter: blur(10px) saturate(120%);
@@ -125,7 +173,7 @@
   }
   .cmd::-webkit-scrollbar { display: none; }
   .cmd .sigil { color: var(--soft); user-select: none; }
-  .cmd code { white-space: nowrap; color: var(--cream); }
+  .cmd code { white-space: nowrap; color: var(--cream); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .cmd button {
     flex-shrink: 0;
     background: var(--cream);
@@ -303,6 +351,16 @@
 </head>
 <body>
   <div class="page-bg" aria-hidden="true"></div>
+
+  <div class="msg-field" aria-hidden="true">
+    <div class="bubble sent" style="left:17%;top:28%;animation-delay:0s;animation-duration:11s">can you add a dark mode toggle?</div>
+    <div class="bubble recv" style="left:10%;top:50%;animation-delay:1.6s;animation-duration:9.5s">Done, pushed to main</div>
+    <div class="bubble sent" style="left:17%;top:72%;animation-delay:1.2s;animation-duration:11.5s">add tests for the auth flow</div>
+    <div class="bubble sent" style="left:83%;top:28%;animation-delay:.8s;animation-duration:12.5s">why is CI failing?</div>
+    <div class="bubble recv" style="left:90%;top:50%;animation-delay:2.4s;animation-duration:10s">Missing import in api.ts — fixed it</div>
+    <div class="bubble recv" style="left:83%;top:72%;animation-delay:3s;animation-duration:9s">Added 12 tests, all passing</div>
+  </div>
+
   <header class="site-header">
     <button id="faqOpen" class="faq-open" aria-haspopup="dialog">FAQ</button>
   </header>
