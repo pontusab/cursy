@@ -1,6 +1,6 @@
 {
   "name": "cursy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Control Cursor from iMessage. Text your own number; a local daemon routes each thread to a persistent cursor-agent session and replies via iMessage.",
   "type": "module",
   "bin": {

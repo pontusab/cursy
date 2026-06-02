@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "./log.js";
 import type { AgentMode } from "./config.js";
@@ -41,7 +41,18 @@ export function resolveCursorBin(): string {
   if (override) return override;
   for (const dir of commonBinDirs()) {
     const candidate = join(dir, "cursor-agent");
-    if (existsSync(candidate)) return candidate;
+    if (existsSync(candidate)) {
+      // cursor-agent installs ~/.local/bin/cursor-agent as a symlink (or
+      // launcher) into a versioned directory, and its self-updater atomically
+      // repoints that symlink at a new version. Resolving to the concrete
+      // target means we spawn a path that stays put during the swap, instead
+      // of the symlink that briefly vanishes (the cause of transient ENOENT).
+      try {
+        return realpathSync(candidate);
+      } catch {
+        return candidate;
+      }
+    }
   }
   return "cursor-agent";
 }
@@ -141,12 +152,7 @@ export function runAgent(opts: RunOptions): Promise<RunResult> {
   log.debug("spawning cursor-agent", { args });
 
   return new Promise<RunResult>((resolve) => {
-    const child = spawn(resolveCursorBin(), args, {
-      cwd: opts.workspace || process.cwd(),
-      env: spawnEnv(),
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
+    let child: ReturnType<typeof spawn> | undefined;
     let chatId: string | undefined = opts.chatId;
     let model: string | undefined;
     let finalResult: string | undefined;
@@ -154,6 +160,7 @@ export function runAgent(opts: RunOptions): Promise<RunResult> {
     let settled = false;
     let graceTimer: NodeJS.Timeout | undefined;
     let stderr = "";
+    let retriedSpawn = false;
 
     const hardTimer = setTimeout(() => {
       log.warn("cursor-agent hard timeout, killing", { timeoutMs });
@@ -162,14 +169,15 @@ export function runAgent(opts: RunOptions): Promise<RunResult> {
     }, timeoutMs);
 
     const kill = () => {
+      const target = child;
       try {
-        child.kill("SIGTERM");
+        target?.kill("SIGTERM");
       } catch {
         /* ignore */
       }
       setTimeout(() => {
         try {
-          child.kill("SIGKILL");
+          target?.kill("SIGKILL");
         } catch {
           /* ignore */
         }
@@ -197,57 +205,81 @@ export function runAgent(opts: RunOptions): Promise<RunResult> {
       resolve({ result, chatId, model, timedOut, exitCode });
     };
 
-    const rl = createInterface({ input: child.stdout });
-    rl.on("line", (line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      let ev: StreamEvent;
-      try {
-        ev = JSON.parse(trimmed) as StreamEvent;
-      } catch {
-        // Non-JSON line (shouldn't happen in stream-json) -> treat as text.
-        assistantChunks.push(trimmed);
-        return;
-      }
+    const start = () => {
+      const current = spawn(resolveCursorBin(), args, {
+        cwd: opts.workspace || process.cwd(),
+        env: spawnEnv(),
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      child = current;
 
-      const cid = extractChatId(ev);
-      if (cid) chatId = cid;
-      if (ev.model) model = ev.model;
-
-      if (ev.type === "result") {
-        if (typeof ev.result === "string") finalResult = ev.result;
-        // Terminal event observed; resolve now and reap the process shortly.
-        finish(false, child.exitCode);
-        graceTimer = setTimeout(kill, 1500);
-        graceTimer.unref?.();
-        return;
-      }
-
-      if (ev.type === "assistant" || ev.message?.role === "assistant") {
-        const text = extractText(ev);
-        if (text) {
-          assistantChunks.push(text);
-          opts.onText?.(text);
+      const rl = createInterface({ input: current.stdout });
+      rl.on("line", (line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        let ev: StreamEvent;
+        try {
+          ev = JSON.parse(trimmed) as StreamEvent;
+        } catch {
+          // Non-JSON line (shouldn't happen in stream-json) -> treat as text.
+          assistantChunks.push(trimmed);
+          return;
         }
-      }
-    });
 
-    child.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString();
-    });
+        const cid = extractChatId(ev);
+        if (cid) chatId = cid;
+        if (ev.model) model = ev.model;
 
-    child.on("error", (err) => {
-      log.error("cursor-agent spawn error", String(err));
-      finalResult =
-        finalResult ??
-        `Failed to run cursor-agent: ${(err as Error).message}`;
-      finish(false, null);
-    });
+        if (ev.type === "result") {
+          if (typeof ev.result === "string") finalResult = ev.result;
+          // Terminal event observed; resolve now and reap the process shortly.
+          finish(false, current.exitCode);
+          graceTimer = setTimeout(kill, 1500);
+          graceTimer.unref?.();
+          return;
+        }
 
-    child.on("close", (code) => {
-      if (stderr.trim()) log.debug("cursor-agent stderr", stderr.trim());
-      finish(false, code);
-    });
+        if (ev.type === "assistant" || ev.message?.role === "assistant") {
+          const text = extractText(ev);
+          if (text) {
+            assistantChunks.push(text);
+            opts.onText?.(text);
+          }
+        }
+      });
+
+      current.stderr.on("data", (d: Buffer) => {
+        stderr += d.toString();
+      });
+
+      current.on("error", (err: NodeJS.ErrnoException) => {
+        // cursor-agent self-updates by atomically swapping its launcher, so a
+        // prompt that lands mid-swap sees ENOENT. Re-resolve and retry once
+        // before giving up, so a transient update doesn't eat the reply.
+        if (err.code === "ENOENT" && !retriedSpawn && !settled) {
+          retriedSpawn = true;
+          log.warn("cursor-agent spawn ENOENT; re-resolving and retrying", String(err));
+          setTimeout(start, 800).unref?.();
+          return;
+        }
+        log.error("cursor-agent spawn error", String(err));
+        finalResult =
+          finalResult ??
+          (err.code === "ENOENT"
+            ? "cursor-agent is unavailable right now (it may be updating). Please send that again in a moment."
+            : `Failed to run cursor-agent: ${err.message}`);
+        finish(false, null);
+      });
+
+      current.on("close", (code) => {
+        // Ignore the failed child's close after a retry superseded it.
+        if (current !== child) return;
+        if (stderr.trim()) log.debug("cursor-agent stderr", stderr.trim());
+        finish(false, code);
+      });
+    };
+
+    start();
   });
 }
 
