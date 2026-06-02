@@ -160,13 +160,20 @@ function extractChatId(ev: StreamEvent): string | undefined {
  */
 export function runAgent(opts: RunOptions): Promise<RunResult> {
   const timeoutMs = opts.timeoutMs ?? 600_000;
-  const args = ["-p", "--output-format", "stream-json"];
-  if (opts.force !== false) args.push("--force");
-  if (opts.chatId) args.push("--resume", opts.chatId);
-  if (opts.workspace) args.push("--workspace", opts.workspace);
-  if (opts.model) args.push("--model", opts.model);
-  if (opts.mode && opts.mode !== "agent") args.push("--mode", opts.mode);
-  args.push(opts.prompt);
+  // Older cursor-agent builds predate the --workspace flag and reject it
+  // outright. We always set the spawn cwd to the workspace, so --workspace is
+  // redundant and can be dropped when an old agent complains (see retry below).
+  const buildArgs = (withWorkspace: boolean): string[] => {
+    const a = ["-p", "--output-format", "stream-json"];
+    if (opts.force !== false) a.push("--force");
+    if (opts.chatId) a.push("--resume", opts.chatId);
+    if (withWorkspace && opts.workspace) a.push("--workspace", opts.workspace);
+    if (opts.model) a.push("--model", opts.model);
+    if (opts.mode && opts.mode !== "agent") a.push("--mode", opts.mode);
+    a.push(opts.prompt);
+    return a;
+  };
+  let args = buildArgs(true);
 
   const wsErr = workspaceError(opts.workspace);
   if (wsErr) {
@@ -191,6 +198,7 @@ export function runAgent(opts: RunOptions): Promise<RunResult> {
     let graceTimer: NodeJS.Timeout | undefined;
     let stderr = "";
     let retriedSpawn = false;
+    let retriedWithoutWorkspace = false;
 
     const hardTimer = setTimeout(() => {
       log.warn("cursor-agent hard timeout, killing", { timeoutMs });
@@ -304,6 +312,22 @@ export function runAgent(opts: RunOptions): Promise<RunResult> {
       current.on("close", (code) => {
         // Ignore the failed child's close after a retry superseded it.
         if (current !== child) return;
+        // Old cursor-agent without --workspace support: drop the flag (cwd
+        // already points at the workspace) and retry once.
+        if (
+          !settled &&
+          code !== 0 &&
+          !retriedWithoutWorkspace &&
+          opts.workspace &&
+          /unknown option '?--workspace'?/.test(stderr)
+        ) {
+          retriedWithoutWorkspace = true;
+          log.warn("cursor-agent lacks --workspace; retrying without it");
+          args = buildArgs(false);
+          stderr = "";
+          start();
+          return;
+        }
         if (stderr.trim()) log.debug("cursor-agent stderr", stderr.trim());
         finish(false, code);
       });

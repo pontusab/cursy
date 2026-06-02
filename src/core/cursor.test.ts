@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveCursorBin, workspaceError } from "./cursor.js";
+import { resolveCursorBin, runAgent, workspaceError } from "./cursor.js";
 
 const ORIG_HOME = process.env.HOME;
 const ORIG_BIN = process.env.CURSY_CURSOR_BIN;
@@ -86,6 +86,41 @@ describe("workspaceError", () => {
     try {
       writeFileSync(file, "");
       expect(workspaceError(file)).toContain("not a directory");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("runAgent --workspace fallback", () => {
+  test("retries without --workspace when the agent rejects the flag", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cursy-fallback-"));
+    try {
+      // Fake cursor-agent: reject --workspace (like older builds), otherwise
+      // emit a stream-json result. Logs each call so we can assert the retry.
+      const fake = join(dir, "cursor-agent");
+      const calls = join(dir, "calls.log");
+      writeFileSync(
+        fake,
+        [
+          "#!/usr/bin/env bash",
+          `echo "$@" >> "${calls}"`,
+          'for a in "$@"; do',
+          '  if [ "$a" = "--workspace" ]; then',
+          `    echo "error: unknown option '--workspace'" >&2`,
+          "    exit 1",
+          "  fi",
+          "done",
+          `echo '{"type":"result","result":"ok-no-workspace"}'`,
+          "exit 0",
+        ].join("\n"),
+        { mode: 0o755 },
+      );
+      process.env.CURSY_CURSOR_BIN = fake;
+
+      const res = await runAgent({ prompt: "hi", workspace: dir });
+      expect(res.result).toBe("ok-no-workspace");
+      expect(res.timedOut).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

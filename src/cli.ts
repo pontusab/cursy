@@ -25,7 +25,7 @@ const program = new Command();
 program
   .name("cursy")
   .description("Control Cursor from iMessage. Runs locally on your Mac.")
-  .version("0.1.2");
+  .version("0.1.3");
 
 program
   .command("onboard")
