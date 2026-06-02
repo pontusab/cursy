@@ -223,28 +223,46 @@ export function watch(opts: WatchOptions): () => void {
 }
 
 /**
- * Invisible sentinel appended to every message cursy sends. When you text your
- * OWN number, Messages echoes the daemon's replies back into the same chat as
- * incoming (is_from_me=0) rows - so without a marker the agent would answer its
- * own replies forever. We tag outgoing text with these zero-width "invisible
- * separator" characters (rendered as nothing) and drop any inbound message that
- * carries them. U+2063 is not stripped by JS String.prototype.trim().
+ * Markers identifying messages cursy sent. When you text your OWN number,
+ * Messages echoes the daemon's replies back into the same chat as incoming
+ * (is_from_me=0) rows - so without a marker the agent would answer its own
+ * replies forever.
+ *
+ * We use two markers, because no single one survives every transport:
+ *  - CURSY_MARKER (invisible U+2063): clean on iMessage (renders as nothing,
+ *    survives JS trim()), but GSM-7 SMS/RCS bridges strip it.
+ *  - CURSY_EMOJI (visible robot, anchored at the start): real UTF-16, so it
+ *    survives SMS/RCS and Unicode normalization. Doubles as a "this is cursy"
+ *    signal. Anchored to the start to bound false positives, and it's only one
+ *    of several loop guards (outbound-echo match + the daemon's circuit
+ *    breaker), so a human who happens to start a message with the robot emoji
+ *    is at worst asked to resend, never stuck in a loop.
  */
 export const CURSY_MARKER = "\u2063\u2063\u2063";
+export const CURSY_EMOJI = "\u{1F916}";
+/** Visible prefix prepended to every outgoing reply. */
+export const CURSY_PREFIX = `${CURSY_EMOJI} `;
 
-/** True if text was produced by cursy (carries the invisible marker). */
+/** True if text was produced by cursy (invisible marker or leading robot). */
 export function hasOwnMarker(text: string): boolean {
-  return text.includes(CURSY_MARKER);
+  if (text.includes(CURSY_MARKER)) return true;
+  return text.trimStart().startsWith(CURSY_EMOJI);
 }
 
-/** Remove the invisible cursy marker before comparing or displaying text. */
+/** Remove cursy's markers before comparing or displaying text. */
 export function stripMarker(text: string): string {
-  return text.split(CURSY_MARKER).join("");
+  let out = text.split(CURSY_MARKER).join("");
+  // Drop a single leading robot prefix (with any following whitespace).
+  const lead = out.trimStart();
+  if (lead.startsWith(CURSY_EMOJI)) {
+    out = lead.slice(CURSY_EMOJI.length).trimStart();
+  }
+  return out;
 }
 
-/** Append the invisible self-echo marker to an outgoing message. */
+/** Tag an outgoing message: visible robot prefix + invisible self-echo marker. */
 function tag(text: string): string {
-  return text + CURSY_MARKER;
+  return CURSY_PREFIX + text + CURSY_MARKER;
 }
 
 function escapeAppleScript(value: string): string {

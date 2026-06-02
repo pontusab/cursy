@@ -1,6 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { decideSelfChat, isSelfChat, SelfChatDeduper } from "./selfchat.js";
-import { CURSY_MARKER, type IncomingMessage } from "./imessage.js";
+import {
+  decideSelfChat,
+  isSelfChat,
+  normalizeForEcho,
+  SelfChatDeduper,
+} from "./selfchat.js";
+import {
+  CURSY_MARKER,
+  CURSY_PREFIX,
+  hasOwnMarker,
+  stripMarker,
+  type IncomingMessage,
+} from "./imessage.js";
 
 const SELF = "46700821951";
 const WHITELIST = [SELF];
@@ -72,6 +83,46 @@ describe("decideSelfChat", () => {
     if (decision.action === "skip") expect(decision.reason).toBe("outbound echo");
   });
 
+  test("our own reply via the visible robot prefix (no invisible marker) is skipped", () => {
+    const d = new SelfChatDeduper();
+    // SMS/RCS strips the invisible marker, but the robot prefix survives.
+    const text = `${CURSY_PREFIX}here is your answer`;
+    const m = msg({ isFromMe: false, text });
+    const decision = decideSelfChat(m, WHITELIST, d, text);
+    expect(decision.action).toBe("skip");
+    if (decision.action === "skip") expect(decision.reason).toBe("own marker");
+  });
+
+  test("echo match survives whitespace/normalization differences", () => {
+    const d = new SelfChatDeduper();
+    d.recordOutbound(`+${SELF}`, "the   answer\nis 42");
+    const echo = "the answer is 42"; // collapsed whitespace on the way back
+    const m = msg({ isFromMe: false, text: echo });
+    const decision = decideSelfChat(m, WHITELIST, d, echo);
+    expect(decision.action).toBe("skip");
+    if (decision.action === "skip") expect(decision.reason).toBe("outbound echo");
+  });
+
+  test("an SMS-split segment of a long reply is caught as an echo", () => {
+    const d = new SelfChatDeduper();
+    const long =
+      "Here is the detailed explanation you asked for about the parser changes and the new tests";
+    d.recordOutbound(`+${SELF}`, long);
+    const segment = long.slice(0, 70); // a marker-less leading SMS segment
+    const m = msg({ isFromMe: false, text: segment });
+    const decision = decideSelfChat(m, WHITELIST, d, segment);
+    expect(decision.action).toBe("skip");
+    if (decision.action === "skip") expect(decision.reason).toBe("outbound echo");
+  });
+
+  test("a tiny human reply is not mistaken for an echo segment", () => {
+    const d = new SelfChatDeduper();
+    d.recordOutbound(`+${SELF}`, "Here is the detailed explanation about the parser");
+    const m = msg({ isFromMe: false, text: "yes" }); // below the segment floor
+    const decision = decideSelfChat(m, WHITELIST, d, "yes");
+    expect(decision.action).toBe("process");
+  });
+
   test("duplicate GUID is skipped", () => {
     const d = new SelfChatDeduper();
     const m = msg();
@@ -121,5 +172,27 @@ describe("SelfChatDeduper bounds", () => {
     for (let i = 0; i < 600; i++) d.markSeen(`g-${i}`);
     // Most recent should still be remembered; very old ones pruned.
     expect(d.hasSeen("g-599")).toBe(true);
+  });
+});
+
+describe("markers", () => {
+  test("hasOwnMarker detects the invisible marker anywhere", () => {
+    expect(hasOwnMarker(`done${CURSY_MARKER}`)).toBe(true);
+  });
+
+  test("hasOwnMarker detects the robot only at the start", () => {
+    expect(hasOwnMarker(`${CURSY_PREFIX}hello`)).toBe(true);
+    // A robot in the middle is the user's content, not our marker.
+    expect(hasOwnMarker("look at this 🤖 bot")).toBe(false);
+  });
+
+  test("stripMarker removes both the robot prefix and invisible marker", () => {
+    expect(stripMarker(`${CURSY_PREFIX}hello${CURSY_MARKER}`)).toBe("hello");
+  });
+
+  test("normalizeForEcho strips markers and collapses whitespace", () => {
+    expect(normalizeForEcho(`${CURSY_PREFIX}the   answer\nis 42${CURSY_MARKER}`)).toBe(
+      "the answer is 42",
+    );
   });
 });

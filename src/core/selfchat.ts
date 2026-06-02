@@ -8,6 +8,23 @@ const TWIN_WINDOW_MS = 15_000;
 const OUTBOUND_ECHO_WINDOW_MS = 120_000;
 
 /**
+ * Shortest inbound length we'll treat as an echo *segment* of a longer reply.
+ * SMS bridges split a long reply into ~160-char parts, so later segments don't
+ * equal the full sent text; we match them as substrings. The floor avoids a
+ * trivial fragment ("ok", "done") spuriously matching a recent reply.
+ */
+const MIN_SEGMENT_ECHO_LEN = 12;
+
+/**
+ * Normalize text for echo comparison so transport-induced differences (Unicode
+ * NFC vs NFD, collapsed/!changed whitespace, stripped markers) don't defeat the
+ * exact-match fallback that catches loops when the invisible marker is lost.
+ */
+export function normalizeForEcho(text: string): string {
+  return stripMarker(text).normalize("NFC").replace(/\s+/g, " ").trim();
+}
+
+/**
  * True when the message belongs to a 1:1 chat with a whitelisted handle — i.e.
  * the user texting their own number (or a whitelisted contact in a direct chat).
  * Used to apply self-chat-specific dedup rules without affecting other threads.
@@ -80,7 +97,7 @@ export class SelfChatDeduper {
   recordOutbound(handle: string | null, text: string): void {
     if (!handle) return;
     const now = Date.now();
-    const clean = stripMarker(text);
+    const clean = normalizeForEcho(text);
     const list = (this.outbound.get(handle) ?? []).filter(
       (e) => now - e.at < OUTBOUND_ECHO_WINDOW_MS,
     );
@@ -92,10 +109,18 @@ export class SelfChatDeduper {
   isOutboundEcho(handle: string | null, text: string): boolean {
     if (!handle) return false;
     const now = Date.now();
-    const clean = stripMarker(text);
-    return (this.outbound.get(handle) ?? []).some(
-      (e) => e.text === clean && now - e.at < OUTBOUND_ECHO_WINDOW_MS,
-    );
+    const clean = normalizeForEcho(text);
+    if (!clean) return false;
+    return (this.outbound.get(handle) ?? []).some((e) => {
+      if (now - e.at >= OUTBOUND_ECHO_WINDOW_MS) return false;
+      if (e.text === clean) return true;
+      // SMS segmentation: the inbound is one part of a longer sent reply.
+      return (
+        clean.length >= MIN_SEGMENT_ECHO_LEN &&
+        clean.length < e.text.length &&
+        e.text.includes(clean)
+      );
+    });
   }
 }
 

@@ -33,14 +33,10 @@ import {
   workspaceFor,
 } from "./router.js";
 import { decideSelfChat, SelfChatDeduper } from "./selfchat.js";
+import { LoopBreaker } from "./breaker.js";
 import { log } from "./log.js";
 import { PID_FILE } from "./paths.js";
 
-// Outbound loop guard: if a single thread receives more than this many replies
-// within the window, we trip a circuit breaker and stop auto-replying to it
-// until a fresh inbound message arrives. Prevents runaway message loops.
-const BREAKER_MAX_REPLIES = 6;
-const BREAKER_WINDOW_MS = 30_000;
 
 // Drop an identical reply sent to the same thread within this window. Guards
 // against duplicate bubbles (e.g. repeated "on it..." or identical errors).
@@ -84,9 +80,8 @@ export class Daemon {
   // Serialize agent runs; a single user shouldn't run many at once.
   private queue: Promise<void> = Promise.resolve();
   private running = false;
-  // Per-handle outbound timestamps + tripped flags for the loop circuit breaker.
-  private replyTimes = new Map<string, number[]>();
-  private breakerTripped = new Set<string>();
+  // Two-tier loop guard (soft, resettable + hard, time-based backstop).
+  private breaker = new LoopBreaker();
   // Last text sent per handle, to drop duplicate consecutive replies.
   private lastSent = new Map<string, { text: string; at: number }>();
   // Last actionable inbound text per handle, to drop self-chat double-delivery.
@@ -208,10 +203,11 @@ export class Daemon {
     this.selfChat.markSeen(msg.guid);
     this.selfChat.recordTwin(msg.handle, cleanText, msg.isFromMe);
 
-    // A genuine inbound message from a whitelisted human resets the loop
-    // circuit breaker for that thread.
-    this.breakerTripped.delete(msg.handle);
-    this.replyTimes.delete(msg.handle);
+    // A genuine inbound message from a whitelisted human resets the SOFT loop
+    // breaker for that thread. The hard backstop intentionally persists (a
+    // slipped self-echo also looks "genuine", so letting inbound reset it would
+    // defeat the guarantee that loops terminate).
+    this.breaker.resetSoft(msg.handle);
 
     // Passphrase gate (optional): first message from a thread must contain it.
     if (this.cfg.passphrase) {
@@ -381,24 +377,7 @@ export class Daemon {
    * inbound message resets it. Guards against runaway message loops.
    */
   private allowSend(handle: string | null): boolean {
-    if (!handle) return true;
-    if (this.breakerTripped.has(handle)) return false;
-    const now = Date.now();
-    const times = (this.replyTimes.get(handle) ?? []).filter(
-      (t) => now - t < BREAKER_WINDOW_MS,
-    );
-    times.push(now);
-    this.replyTimes.set(handle, times);
-    if (times.length > BREAKER_MAX_REPLIES) {
-      this.breakerTripped.add(handle);
-      log.warn("loop circuit breaker tripped; pausing replies", {
-        handle,
-        window_ms: BREAKER_WINDOW_MS,
-        max: BREAKER_MAX_REPLIES,
-      });
-      return false;
-    }
-    return true;
+    return this.breaker.allow(handle);
   }
 
   /** True if `text` duplicates the previous reply to this handle very recently. */
