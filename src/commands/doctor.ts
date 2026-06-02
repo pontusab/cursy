@@ -19,6 +19,7 @@ export interface DoctorOptions {
 function line(label: string, res: CheckResult): void {
   const icon = res.ok ? pc.green("ok") : pc.red("missing");
   p.log.message(`${icon}  ${pc.bold(label)} ${pc.dim("- " + res.detail)}`);
+  if (res.warn) p.log.warn(res.warn);
 }
 
 /**

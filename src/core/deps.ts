@@ -1,6 +1,10 @@
 import { exec, execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { getCursorVersion, resolveCursorBin } from "./cursor.js";
+import {
+  cursorSupportsWorkspace,
+  getCursorVersion,
+  resolveCursorBin,
+} from "./cursor.js";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -8,6 +12,8 @@ const execFileAsync = promisify(execFile);
 export interface CheckResult {
   ok: boolean;
   detail: string;
+  /** Non-fatal advisory (e.g. an outdated but working dependency). */
+  warn?: string;
 }
 
 const MIN_NODE = [20, 12, 0];
@@ -47,9 +53,18 @@ export async function checkMacOS(): Promise<CheckResult> {
 
 export async function checkCursorAgent(): Promise<CheckResult> {
   const version = await getCursorVersion();
-  return version
-    ? { ok: true, detail: `cursor-agent ${version}` }
-    : { ok: false, detail: "cursor-agent not found on PATH" };
+  if (!version) {
+    return { ok: false, detail: "cursor-agent not found on PATH" };
+  }
+  // cursy passes --workspace; builds that predate it reject the prompt outright
+  // (we retry without it at runtime, but nudge the user to update).
+  const supportsWorkspace = await cursorSupportsWorkspace();
+  const warn =
+    supportsWorkspace === false
+      ? "cursor-agent is outdated (no --workspace support). Update it: " +
+        "curl https://cursor.com/install -fsS | bash"
+      : undefined;
+  return { ok: true, detail: `cursor-agent ${version}`, warn };
 }
 
 /** Run the official Cursor CLI installer. */

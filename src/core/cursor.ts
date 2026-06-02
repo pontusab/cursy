@@ -350,3 +350,22 @@ export async function getCursorVersion(): Promise<string | null> {
     child.on("close", (code) => resolve(code === 0 ? out.trim() : null));
   });
 }
+
+/**
+ * Feature-detect whether the installed cursor-agent understands --workspace.
+ * cursor-agent versions are date-based (e.g. 2026.06.02-...), so there's no
+ * meaningful semver to compare; we read `--help` and look for the flag.
+ * Returns null when the help text can't be read (treat as unknown).
+ */
+export async function cursorSupportsWorkspace(): Promise<boolean | null> {
+  return new Promise((resolve) => {
+    const child = spawn(resolveCursorBin(), ["--help"], {
+      env: spawnEnv(),
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    let out = "";
+    child.stdout.on("data", (d: Buffer) => (out += d.toString()));
+    child.on("error", () => resolve(null));
+    child.on("close", () => resolve(out ? out.includes("--workspace") : null));
+  });
+}

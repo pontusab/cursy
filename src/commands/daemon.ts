@@ -37,6 +37,7 @@ import { onboardCommand } from "./onboard.js";
 async function ensureCursorLogin(): Promise<void> {
   const cursor = await checkCursorAgent();
   if (!cursor.ok) return; // doctor/onboard handle install; nothing to log into.
+  if (cursor.warn) p.log.warn(cursor.warn);
   const auth = await checkCursorAuth();
   if (auth.ok) {
     p.log.success("cursor-agent is logged in.");
@@ -182,6 +183,7 @@ export async function statusCommand(): Promise<void> {
   p.log.message(
     `${pc.bold("cursor-agent")} ${cursor.ok ? pc.green("ok") : pc.red(cursor.detail)}`,
   );
+  if (cursor.warn) p.log.warn(cursor.warn);
   if (cfg.reactions) {
     const ax = await checkAccessibility();
     p.log.message(
