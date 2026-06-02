@@ -57,12 +57,44 @@ mv -f "$BIN.new" "$BIN"
 
 echo "Installed cursy to $BIN"
 
+add_to_path() {
+  # Pick the rc file for the user's login shell.
+  local shell_name rc export_line
+  shell_name="$(basename "${SHELL:-}")"
+  case "$shell_name" in
+    zsh)  rc="$HOME/.zshrc" ;;
+    bash) rc="${HOME}/.bashrc"; [[ -f "$HOME/.bash_profile" && ! -f "$rc" ]] && rc="$HOME/.bash_profile" ;;
+    *)    rc="$HOME/.profile" ;;
+  esac
+
+  export_line="export PATH=\"$INSTALL_DIR:\$PATH\""
+
+  # Idempotent: only append if this exact line isn't already there.
+  if [[ -f "$rc" ]] && grep -qF "$export_line" "$rc"; then
+    return 0
+  fi
+
+  {
+    echo ""
+    echo "# Added by cursy installer"
+    echo "$export_line"
+  } >> "$rc"
+  echo "Added $INSTALL_DIR to your PATH in $rc"
+  echo "Run 'source $rc' (or open a new terminal) to use cursy now."
+}
+
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *)
     echo
-    echo "⚠️  $INSTALL_DIR is not on your PATH. Add it, e.g.:"
-    echo "    echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
+    if [[ "${CURSY_NO_MODIFY_PATH:-0}" == "1" ]]; then
+      echo "⚠️  $INSTALL_DIR is not on your PATH. Add it, e.g.:"
+      echo "    echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
+    else
+      add_to_path
+    fi
+    # Make cursy usable for the rest of this script run.
+    export PATH="$INSTALL_DIR:$PATH"
     ;;
 esac
 
