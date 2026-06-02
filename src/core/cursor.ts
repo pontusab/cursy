@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "./log.js";
 import type { AgentMode } from "./config.js";
@@ -55,6 +55,25 @@ export function resolveCursorBin(): string {
     }
   }
   return "cursor-agent";
+}
+
+/** Returns a user-facing error when workspace is set but missing or not a directory. */
+export function workspaceError(workspace: string): string | null {
+  if (!workspace) return null;
+  if (!existsSync(workspace)) {
+    return (
+      `Workspace ${workspace} does not exist. ` +
+      "Set a valid directory with `cursy config` or `/workspace <path>` in the thread."
+    );
+  }
+  try {
+    if (!statSync(workspace).isDirectory()) {
+      return `Workspace ${workspace} is not a directory.`;
+    }
+  } catch {
+    return `Workspace ${workspace} is not accessible.`;
+  }
+  return null;
 }
 
 export interface RunOptions {
@@ -148,6 +167,17 @@ export function runAgent(opts: RunOptions): Promise<RunResult> {
   if (opts.model) args.push("--model", opts.model);
   if (opts.mode && opts.mode !== "agent") args.push("--mode", opts.mode);
   args.push(opts.prompt);
+
+  const wsErr = workspaceError(opts.workspace);
+  if (wsErr) {
+    log.error("invalid workspace", { workspace: opts.workspace });
+    return Promise.resolve({
+      result: wsErr,
+      chatId: opts.chatId,
+      timedOut: false,
+      exitCode: null,
+    });
+  }
 
   log.debug("spawning cursor-agent", { args });
 
