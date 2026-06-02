@@ -35,38 +35,38 @@
     overflow-x: hidden;
     height: 100%;
     height: -webkit-fill-available;
+    background: #0c1330;
   }
   body {
+    position: relative;
     min-height: 100vh;
     min-height: 100dvh;
     min-height: -webkit-fill-available;
     font-family: var(--sans);
     color: var(--cream);
-    background-color: #0c1330;
-    background-image: url("img/bg.jpg");
-    background-position: center center;
-    background-size: cover;
-    background-repeat: no-repeat;
-    /* scroll: reliable on iOS; fixed is applied on desktop below */
-    background-attachment: scroll;
+    background: #0c1330;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
   }
-  @media (hover: hover) and (pointer: fine) {
-    body { background-attachment: fixed; }
-  }
-  /* Soft scrim: darken just enough for legible text, keep the color */
-  body::before {
-    content: "";
+  /* Fixed layer: full viewport on iOS + desktop (not behind html via negative z-index) */
+  .page-bg {
     position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: #0c1330 url("img/bg.jpg") center center / cover no-repeat;
+    pointer-events: none;
+  }
+  .page-bg::after {
+    content: "";
+    position: absolute;
     inset: 0;
     background:
       radial-gradient(105% 80% at 50% 46%, rgba(6,10,28,0.18) 0%, rgba(6,10,28,0.46) 58%, rgba(4,7,20,0.66) 100%);
-    pointer-events: none;
   }
 
   .hero {
     position: relative;
+    z-index: 1;
     min-height: 100vh;
     min-height: 100dvh;
     min-height: -webkit-fill-available;
@@ -74,11 +74,20 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    text-align: center;
+    width: 100%;
     padding: 40px 22px;
   }
 
-  .stage { position: relative; max-width: 540px; }
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 540px;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
 
   .brand {
     font-size: 13px;
@@ -102,7 +111,7 @@
     display: inline-flex;
     align-items: center;
     gap: 12px;
-    max-width: calc(100vw - 44px);
+    max-width: 100%;
     overflow-x: auto;
     background: rgba(8, 12, 28, 0.34);
     backdrop-filter: blur(10px) saturate(120%);
@@ -283,13 +292,19 @@
     color: rgba(245, 242, 234, 0.82);
   }
   @media (max-width: 480px) {
-    .cmd { font-size: 10.5px; gap: 8px; padding: 10px 10px 10px 12px; }
+    .cmd {
+      font-size: 10.5px;
+      gap: 8px;
+      padding: 10px 10px 10px 12px;
+      max-width: calc(100vw - 44px);
+    }
     .credit { display: none; }
     .footer { justify-content: center; }
   }
 </style>
 </head>
 <body>
+  <div class="page-bg" aria-hidden="true"></div>
   <header class="site-header">
     <button id="faqOpen" class="faq-open" aria-haspopup="dialog">FAQ</button>
   </header>
