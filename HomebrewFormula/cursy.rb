@@ -14,12 +14,12 @@ class Cursy < Formula
 
   on_arm do
     url "https://github.com/pontusab/cursy/releases/download/v#{version}/cursy-darwin-arm64.tar.gz"
-    sha256 "REPLACE_WITH_ARM64_SHA256"
+    sha256 "0a08d65e84ddef8f3ebb0b362f637d9f5f1179357b0dbf98995c2c0658f07599"
   end
 
   on_intel do
     url "https://github.com/pontusab/cursy/releases/download/v#{version}/cursy-darwin-x64.tar.gz"
-    sha256 "REPLACE_WITH_X64_SHA256"
+    sha256 "3621351d20766e8075ca09e9748e5067797ffff08cb9948527a9568425e7c9c4"
   end
 
   def install
@@ -27,6 +27,6 @@ class Cursy < Formula
   end
 
   test do
-    assert_match "cursy", shell_output("#{bin}/cursy --version")
+    assert_match version.to_s, shell_output("#{bin}/cursy --version")
   end
 end

@@ -115,14 +115,6 @@ Messages starting with `/` are interpreted as commands:
 | `cursy config [--show]` | View or edit configuration |
 | `cursy qr [prompt]` | Print a QR code that opens Messages with a starter prompt |
 
-## Security
-
-The agent runs with `--force` by default, meaning it can **edit files and run shell commands** in the configured workspace. Treat texting cursy like having a terminal open to your machine:
-
-- Only whitelisted handles are processed; everything else is ignored.
-- Optionally require a passphrase before the agent will respond (`cursy onboard` / `cursy config`).
-- Use a dedicated workspace directory rather than your home folder if you want to limit blast radius.
-
 ## Configuration
 
 Config lives at `~/.config/cursy/config.json` (mode `600`):
@@ -170,6 +162,7 @@ cursy gives whoever can message your whitelisted handle the ability to run `curs
 - **Whitelist.** Only normalized handles in `whitelist` are honored; everything else is dropped before reaching the agent.
 - **Passphrase gate (optional).** Set `passphrase` so a thread must send the secret before the agent will act — recommended if you ever enable `allowSms` or share a device.
 - **Scope `force`.** For a lower-risk setup, set `force: false` (or `defaultMode: "plan"`/`"ask"`) so the agent proposes instead of executing.
+- **Scope the workspace.** Point `defaultWorkspace` at a dedicated repo rather than your home folder to limit blast radius.
 - **Prompt injection.** The agent acts on message text and repo contents; don't point it at untrusted repositories while `force` is on.
 
 ## Limitations
