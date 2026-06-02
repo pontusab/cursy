@@ -29,14 +29,20 @@
     --glow: 0 1px 2px rgba(0,0,0,0.5), 0 2px 30px rgba(0,0,0,0.45);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { -webkit-text-size-adjust: 100%; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
   body {
     min-height: 100vh;
     font-family: var(--sans);
     color: var(--cream);
     background: #0c1330 url("img/bg.jpg") center center / cover no-repeat fixed;
     -webkit-font-smoothing: antialiased;
+  }
+
+  .hero {
+    position: relative;
+    min-height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
@@ -104,6 +110,125 @@
   }
   .cmd button:hover { opacity: 0.85; }
 
+  .site-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 18px 20px;
+  }
+  .faq-open {
+    background: none;
+    border: 0;
+    color: rgba(245, 242, 234, 0.92);
+    padding: 4px;
+    font-family: var(--sans);
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    text-shadow: var(--glow);
+    transition: color .15s;
+  }
+  .faq-open:hover { color: var(--cream); }
+
+  .modal {
+    width: min(560px, calc(100vw - 36px));
+    max-height: min(82vh, 720px);
+    margin: auto;
+    padding: 0;
+    border: 1px solid rgba(245, 242, 234, 0.16);
+    border-radius: 18px;
+    background: rgba(12, 18, 40, 0.72);
+    backdrop-filter: blur(24px) saturate(130%);
+    -webkit-backdrop-filter: blur(24px) saturate(130%);
+    color: var(--cream);
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+  }
+  .modal::backdrop {
+    background: rgba(4, 7, 20, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .modal[open] { animation: modalIn .22s ease; }
+  .modal[open]::backdrop { animation: fadeIn .22s ease; }
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(10px) scale(.98); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 22px 14px;
+  }
+  .modal-head h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 26px;
+  }
+  .modal-close {
+    background: none;
+    border: 0;
+    color: var(--soft);
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    transition: color .15s;
+  }
+  .modal-close:hover { color: var(--cream); }
+
+  .modal-body {
+    padding: 0 18px 18px;
+    overflow-y: auto;
+    max-height: calc(min(82vh, 720px) - 74px);
+  }
+  .modal-body details {
+    border-bottom: 1px solid rgba(245, 242, 234, 0.12);
+  }
+  .modal-body details:last-child { border-bottom: 0; }
+  .modal-body summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 15px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--cream);
+  }
+  .modal-body summary::-webkit-details-marker { display: none; }
+  .modal-body summary .chev {
+    flex-shrink: 0;
+    width: 8px; height: 8px;
+    border-right: 1.5px solid var(--soft);
+    border-bottom: 1.5px solid var(--soft);
+    transform: rotate(45deg);
+    transition: transform .2s ease;
+  }
+  .modal-body details[open] summary .chev { transform: rotate(-135deg); }
+  .modal-body details p {
+    padding: 0 6px 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--soft);
+  }
+  .modal-body details p code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--cream);
+  }
+  .modal-body details p a { color: var(--cream); text-decoration: underline; text-underline-offset: 2px; }
+
   .footer {
     position: fixed;
     left: 18px;
@@ -140,15 +265,59 @@
 </style>
 </head>
 <body>
-  <main class="stage">
-    <h1>Cursor,<br />from iMessage.</h1>
+  <header class="site-header">
+    <button id="faqOpen" class="faq-open" aria-haspopup="dialog">FAQ</button>
+  </header>
 
-    <div class="cmd">
-      <span class="sigil">$</span>
-      <code id="cmd">curl -fsSL https://cursy.dev/install | bash</code>
-      <button id="copy" aria-label="Copy install command">Copy</button>
+  <section class="hero">
+    <main class="stage">
+      <h1>Cursor,<br />from iMessage.</h1>
+
+      <div class="cmd">
+        <span class="sigil">$</span>
+        <code id="cmd">curl -fsSL https://cursy.dev/install | bash</code>
+        <button id="copy" aria-label="Copy install command">Copy</button>
+      </div>
+    </main>
+  </section>
+
+  <dialog id="faq" class="modal" aria-label="Frequently asked questions">
+    <div class="modal-head">
+      <h2>FAQ</h2>
+      <button id="faqClose" class="modal-close" aria-label="Close">&times;</button>
     </div>
-  </main>
+    <div class="modal-body">
+      <details>
+        <summary>What is cursy?<span class="chev"></span></summary>
+        <p>cursy lets you control <a href="https://cursor.com">Cursor</a> from iMessage. You text your own number (or a dedicated thread) and a small daemon on your Mac runs the prompt through the <code>cursor-agent</code> CLI, then texts the result back — like having a coding agent you chat with from your phone.</p>
+      </details>
+
+      <details>
+        <summary>How does it work?<span class="chev"></span></summary>
+        <p>A background daemon (a launchd agent) watches the local Messages database for new texts from whitelisted handles. Each message runs through <code>cursor-agent</code> in your chosen workspace, and the reply is sent back through Messages.app. Every thread maps to a persistent agent session, so follow-ups keep full context.</p>
+      </details>
+
+      <details>
+        <summary>What can I do with it?<span class="chev"></span></summary>
+        <p>Ask it to read, edit, and run code in a workspace repo — "list the largest files," "add a test for the parser," "fix the failing build." It's a coding agent scoped to your repo, not a general chatbot. Built-in commands like <code>/new</code>, <code>/workspace</code>, and <code>/model</code> let you steer each thread.</p>
+      </details>
+
+      <details>
+        <summary>Is it private?<span class="chev"></span></summary>
+        <p>Yes. Everything runs locally on your Mac — no cloud relay, no third-party servers — and your iMessage credentials never leave Messages.app. cursy reads the Messages database read-only and replies via AppleScript.</p>
+      </details>
+
+      <details>
+        <summary>Is it safe?<span class="chev"></span></summary>
+        <p>Only whitelisted handles are processed, and SMS/RCS is ignored by default (iMessage only). You can require a passphrase, scope the agent to a dedicated workspace, or disable write/shell access. With the default <code>force</code> mode it can edit files and run commands, so treat it like SSH access to your machine.</p>
+      </details>
+
+      <details>
+        <summary>What do I need?<span class="chev"></span></summary>
+        <p>macOS 14 (Sonoma) or newer, Messages signed in to iMessage, and a Cursor account (cursy can install the <code>cursor-agent</code> CLI for you). Setup walks you through two macOS permissions. Install with the command above or <code>brew install pontusab/tap/cursy</code>, then run <code>cursy start</code>.</p>
+      </details>
+    </div>
+  </dialog>
 
   <footer class="footer">
     <div class="credit">Vincent van Gogh, <em>Starry Night Over the Rhône</em>, 1888</div>
@@ -169,6 +338,16 @@
       } catch {
         btn.textContent = "⌘C";
       }
+    });
+
+    const faq = document.getElementById("faq");
+    document.getElementById("faqOpen").addEventListener("click", () => faq.showModal());
+    document.getElementById("faqClose").addEventListener("click", () => faq.close());
+    // Close when clicking the backdrop (outside the dialog box).
+    faq.addEventListener("click", (e) => {
+      const r = faq.getBoundingClientRect();
+      const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (!inside) faq.close();
     });
   </script>
 </body>
